@@ -1,0 +1,10 @@
+server:
+  port: 8080
+
+telegram:
+  bots:
+    my_authentication_bot:
+      url: "t.me/my_authentication_bot"
+      name: "MyAuthenticationBot"
+      username: "my_authentication_bot"
+      token: "..."
