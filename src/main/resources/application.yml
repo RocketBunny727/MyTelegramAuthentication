@@ -7,7 +7,7 @@ telegram:
       url: t.me/my_authentication_bot
       name: MyAuthenticationBot
       username: my_authentication_bot
-      token: "7890662189:AAEyDjtf4UL5tzy5ftN2Oxw0OwPJcld1PPE"
+      token: "NODATA USER ENV FILE"
 
 spring:
   datasource:
