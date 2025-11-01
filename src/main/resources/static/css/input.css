@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-out;
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        @apply bg-gray-900 text-white;
+    }
+    .card {
+        @apply bg-gray-800 shadow-gray-700;
+    }
+    h1 {
+        @apply text-gray-100;
+    }
+    .text-gray-600 {
+        @apply text-gray-300;
+    }
+    .text-gray-900 {
+        @apply text-gray-100;
+    }
+}

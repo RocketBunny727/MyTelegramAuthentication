@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram User Info</title>
+    <link href="/css/output.css" rel="stylesheet">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen font-sans">
+<div id="app" class="bg-white p-8 rounded-xl shadow-lg max-w-lg w-full mx-4 animate-fade-in card">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Информация о пользователе</h1>
+    <div id="userInfo" class="space-y-4">
+        <div th:if="${user}">
+            <p><strong>ID:</strong> <span th:text="${user.id}"></span></p>
+            <p><strong>Имя:</strong> <span th:text="${user.firstName}"></span></p>
+            <p th:if="${user.lastName}"><strong>Фамилия:</strong> <span th:text="${user.lastName}"></span></p>
+            <p th:if="${user.username}"><strong>Имя пользователя:</strong> <span th:text="${user.username}"></span></p>
+            <p><strong>Дата авторизации:</strong> <span th:text="${user.authDate}"></span></p>
+        </div>
+        <div id="dynamicUserInfo" class="hidden"></div>
+    </div>
+    <div class="mt-8 text-center">
+        <a href="/" class="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">Обновить</a>
+    </div>
+</div>
+<div id="error" class="bg-red-100 p-4 rounded-lg text-red-800" th:if="${errorMessage}">
+    <p th:text="${errorMessage}"></p>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const tele = window.Telegram.WebApp;
+        if (tele) {
+            tele.ready();
+            tele.expand();
+
+            const user = tele.initDataUnsafe.user;
+            if (user) {
+                const dynamicUserInfo = document.getElementById('dynamicUserInfo');
+                dynamicUserInfo.innerHTML = `
+                        <p><strong>ID:</strong> ${user.id}</p>
+                        <p><strong>Имя:</strong> ${user.first_name || 'N/A'}</p>
+                        <p><strong>Фамилия:</strong> ${user.last_name || 'N/A'}</p>
+                        <p><strong>Имя пользователя:</strong> ${user.username || 'N/A'}</p>
+                    `;
+                dynamicUserInfo.classList.remove('hidden');
+            }
+        }
+
+        fetch('/', { credentials: 'include' })
+            .then(response => console.log('Server response:', response.status))
+            .catch(error => console.error('Fetch error:', error));
+    });
+</script>
+</body>
+</html>
