@@ -1,74 +1,104 @@
 package com.example.mytelegramauthentication.core.util;
 
 import io.micrometer.common.util.StringUtils;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+@Component
+@RequiredArgsConstructor
 @Slf4j
 public class TelegramInitDataValidator {
-    private static final String HMAC_SHA256_ALGO = "HmacSHA256";
+
+    @Value("${telegram.bots.my_authentication_bot.token}")
+    private String botToken;
+
     private static final String TG_WEB_APP_DATA = "WebAppData";
-
-    private final String botToken;
-
-    public TelegramInitDataValidator(String botToken) {
-        this.botToken = botToken;
-    }
+    private static final String HMAC_SHA256_ALGO = "HmacSHA256";
 
     public boolean checkData(String initData) {
+        log.info("Validating initData: {}", initData);
         if (StringUtils.isBlank(initData)) {
+            log.warn("initData is empty");
             return false;
         }
 
-        String parsedInitData = URLDecoder.decode(initData, StandardCharsets.UTF_8);
         String[] hashContainer = new String[1];
-        List<String> sortedUrlDecoded = extractAndSortData(parsedInitData, hashContainer);
+        List<String> sortedData = extractAndSortData(initData, hashContainer);
 
         if (hashContainer[0] == null) {
+            log.warn("Hash not found in initData");
             return false;
         }
 
-        byte[] secretKeyForData = hmacH256(botToken.getBytes(StandardCharsets.UTF_8), TG_WEB_APP_DATA.getBytes(StandardCharsets.UTF_8));
-        if (secretKeyForData == null) {
-            log.error("Невозможно сформировать ключ для подписи начальных данных пользователя Mini App");
+        byte[] secretKey = hmacH256(botToken.getBytes(StandardCharsets.UTF_8),
+                TG_WEB_APP_DATA.getBytes(StandardCharsets.UTF_8));
+        if (secretKey == null) {
+            log.error("Failed to generate secret key");
             return false;
         }
 
-        return validateHash(sortedUrlDecoded, hashContainer[0], secretKeyForData);
-    }
-
-    private boolean validateHash(List<String> sortedData, String originalHash, byte[] secretKey) {
-        byte[] dataHash = hmacH256(String.join("\n", sortedData).getBytes(StandardCharsets.UTF_8), secretKey);
-        if (dataHash == null) {
-            return false;
-        }
-
-        String computedHashString = bytesToHex(dataHash);
-        return Objects.equals(originalHash, computedHashString);
+        return validateHash(sortedData, hashContainer[0], secretKey);
     }
 
     private List<String> extractAndSortData(String initData, String[] hashContainer) {
-        return Arrays.stream(initData.split("&"))
-                .map(s -> extractHash(s, hashContainer))
-                .filter(s -> !s.startsWith("hash="))
-                .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
-                .sorted()
+        Map<String, String> dataMap = new HashMap<>();
+
+        for (String pair : initData.split("&")) {
+            int idx = pair.indexOf('=');
+            if (idx == -1) continue;
+
+            String key = pair.substring(0, idx);
+            String value = pair.substring(idx + 1);
+
+            if ("hash".equals(key)) {
+                hashContainer[0] = value;
+                continue;
+            }
+
+            key = URLDecoder.decode(key, StandardCharsets.UTF_8);
+            value = URLDecoder.decode(value, StandardCharsets.UTF_8);
+
+            if ("user".equals(key)) {
+                value = URLDecoder.decode(value, StandardCharsets.UTF_8);
+            }
+
+            dataMap.put(key, value);
+        }
+
+        return dataMap.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
                 .collect(Collectors.toList());
     }
 
-    private String extractHash(String param, String[] hashContainer) {
-        if (param.startsWith("hash=")) {
-            hashContainer[0] = param.substring(5);
+    private boolean validateHash(List<String> sortedData, String originalHash, byte[] secretKey) {
+        String dataCheckString = String.join("\n", sortedData);
+        log.info("data-check-string: {}", dataCheckString);
+
+        byte[] computedHash = hmacH256(dataCheckString.getBytes(StandardCharsets.UTF_8), secretKey);
+        if (computedHash == null) {
+            log.error("Failed to compute HMAC-SHA256");
+            return false;
         }
-        return param;
+
+        String computedHashString = bytesToHex(computedHash);
+        log.info("Expected hash: {}, Computed hash: {}", originalHash, computedHashString);
+
+        return originalHash.equalsIgnoreCase(computedHashString);
     }
 
     private byte[] hmacH256(byte[] data, byte[] key) {
@@ -77,8 +107,8 @@ public class TelegramInitDataValidator {
             SecretKeySpec secretKeySpec = new SecretKeySpec(key, HMAC_SHA256_ALGO);
             sha256HMAC.init(secretKeySpec);
             return sha256HMAC.doFinal(data);
-        } catch (Exception e) {
-            log.error("Ошибка при вычислении HMAC-SHA256", e);
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            log.error("Error computing HMAC-SHA256: {}", e.getMessage(), e);
             return null;
         }
     }

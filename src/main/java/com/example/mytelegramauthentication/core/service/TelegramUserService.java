@@ -1,21 +1,24 @@
 package com.example.mytelegramauthentication.core.service;
 
 import com.example.mytelegramauthentication.core.model.TelegramUser;
-import com.example.mytelegramauthentication.core.repository.ITelegramUserRepository;
 import com.example.mytelegramauthentication.core.util.TelegramInitDataValidator;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TelegramUserService {
-    private final ITelegramUserRepository repository;
+
     private final TelegramInitDataValidator validator;
     private final ObjectMapper objectMapper;
 
@@ -24,36 +27,37 @@ public class TelegramUserService {
             throw new IllegalArgumentException("Invalid Telegram initData");
         }
 
-        Map<String, String> params = parseInitData(initData);
-        String userJson = params.get("user");
-        if (userJson == null) {
-            throw new IllegalArgumentException("User data not found in initData");
+        String[] params = initData.split("&");
+        Map<String, String> paramMap = Arrays.stream(params)
+                .map(param -> param.split("=", 2))
+                .filter(arr -> arr.length == 2)
+                .collect(Collectors.toMap(arr -> arr[0], arr -> arr[1]));
+
+        String userParam = paramMap.get("user");
+        if (userParam == null) {
+            throw new RuntimeException("User data not found in initData");
         }
 
         try {
-            Map<String, Object> userData = objectMapper.readValue(userJson, Map.class);
+            String decodedUserJson = URLDecoder.decode(userParam, StandardCharsets.UTF_8);
+            log.info("Decoded user JSON: {}", decodedUserJson);
+
+            Map<String, Object> userData = objectMapper.readValue(decodedUserJson, new TypeReference<>() {});
+            log.info("Parsed user data: {}", userData);
+
             TelegramUser user = TelegramUser.builder()
-                    .id(Long.parseLong(userData.get("id").toString()))
-                    .firstName(userData.get("firstName").toString())
-                    .lastName(userData.get("lastName").toString())
-                    .username(userData.get("username").toString())
-                    .authDate(userData.get("authDate").toString())
+                    .id(((Number) userData.get("id")).longValue())
+                    .firstName((String) userData.get("first_name"))
+                    .lastName((String) userData.get("last_name"))
+                    .username((String) userData.get("username"))
+                    .authDate(paramMap.get("auth_date"))
                     .build();
-            return repository.save(user);
+
+            log.info("User authenticated: {}", user);
+            return user;
         } catch (Exception e) {
-            log.error("Ошибка при парсинге user данных", e);
+            log.error("Error parsing user details", e);
             throw new RuntimeException("Failed to parse user data", e);
         }
-    }
-
-    private Map<String, String> parseInitData(String initData) {
-        Map<String, String> params = new HashMap<>();
-        for (String param : initData.split("&")) {
-            String[] keyValue = param.split("=");
-            if (keyValue.length == 2) {
-                params.put(keyValue[0], keyValue[1]);
-            }
-        }
-        return params;
     }
 }

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Загрузка...</title>
+    <link href="/css/output.css" rel="stylesheet">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen font-sans">
+<div class="bg-white p-8 rounded-xl shadow-lg max-w-lg w-full mx-4 text-center animate-pulse">
+    <h1 class="text-2xl font-bold text-gray-800 mb-4">Загрузка данных...</h1>
+    <p class="text-gray-600">Пожалуйста, подождите, идёт авторизация.</p>
+</div>
+<div id="error" class="bg-red-100 p-4 rounded-lg text-red-800 hidden mt-4"></div>
+
+<script>
+    function checkTelegramWebApp() {
+        console.log('Проверка Telegram.WebApp...');
+        if (window.Telegram && window.Telegram.WebApp) {
+            console.log('Telegram.WebApp доступен');
+            const tele = window.Telegram.WebApp;
+            tele.ready();
+            tele.expand();
+
+            const initData = tele.initData;
+            console.log('initData:', initData);
+            document.getElementById('init-data').innerText = `initData: ${initData || 'No initData'}`;
+
+            if (initData) {
+                document.cookie = `telegramInitData=${encodeURIComponent(initData)}; path=/; SameSite=Lax; Secure`;
+                console.log('Cookie set: telegramInitData=', initData);
+            } else {
+                console.error('No initData provided');
+            }
+
+            if (initData) {
+                console.log('Отправка initData на сервер через POST /auth...');
+                fetch('/auth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'initData=' + encodeURIComponent(initData),
+                    credentials: 'include'
+                })
+                    .then(response => {
+                        console.log('Ответ от сервера:', response.status);
+                        if (!response.ok) {
+                            throw new Error('Ошибка сервера: ' + response.status);
+                        }
+                        return response.text();
+                    })
+                    .then(html => {
+                        console.log('HTML-ответ сервера получен');
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const newBody = doc.querySelector('body');
+                        document.body.innerHTML = newBody.innerHTML;
+                        const link = document.createElement('link');
+                        link.href = '/css/output.css';
+                        link.rel = 'stylesheet';
+                        document.head.appendChild(link);
+                        console.log('Страница обновлена на index.html');
+                    })
+                    .catch(error => {
+                        console.error('Ошибка при отправке initData:', error);
+                        const errorDiv = document.getElementById('error');
+                        errorDiv.innerText = 'Ошибка: ' + error.message;
+                        errorDiv.classList.remove('hidden');
+                    });
+            } else {
+                console.warn('initData пустой');
+                const errorDiv = document.getElementById('error');
+                errorDiv.innerText = 'initData отсутствует';
+                errorDiv.classList.remove('hidden');
+            }
+        } else {
+            console.error('Telegram.WebApp не доступен, повторная проверка...');
+            setTimeout(checkTelegramWebApp, 500); // Повторная проверка через 500 мс
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('Страница loading.html загружена');
+        console.log('User-Agent:', navigator.userAgent);
+        checkTelegramWebApp();
+    });
+</script>
+<p id="init-data" style="display:none;">Loading initData...</p>
+</body>
+</html>
